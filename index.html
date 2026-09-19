@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ของในเกมตอนนี้</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground: #dde5ea;
+    --ink: #14212b;
+    --panel: #f7f9fa;
+    --slot: #ffffff;
+    --teal: #0f8b8d;
+    --gold: #f4b63f;
+    --alert: #b8452f;
+    --muted: #55677a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Prompt", "Noto Sans Thai", "Leelawadee UI", Tahoma, sans-serif;
+    line-height: 1.6;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 40px 20px 64px; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: flex-end;
+    justify-content: space-between; gap: 12px 24px;
+    margin-bottom: 28px;
+  }
+  h1 { margin: 0; font-size: clamp(28px, 5vw, 44px); font-weight: 700; line-height: 1.15; }
+  .status { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 15px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--teal); flex: none; }
+  .dot.live { animation: pulse 1.6s ease-in-out infinite; }
+  .dot.error { background: var(--alert); }
+  @keyframes pulse { 50% { opacity: .35; } }
+
+  .player {
+    background: var(--panel);
+    border: 2px solid var(--ink);
+    border-radius: 10px;
+    padding: 18px 20px 20px;
+    margin-bottom: 18px;
+  }
+  .player-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .player-name { font-size: 20px; font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+  .player-total { color: var(--muted); font-size: 15px; white-space: nowrap; }
+
+  .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+  .slot {
+    position: relative;
+    background: var(--slot);
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    min-height: 76px;
+    padding: 10px 10px 10px 12px;
+    display: flex; align-items: center;
+    font-weight: 500; font-size: 15px; line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .badge {
+    position: absolute; right: -2px; top: -2px;
+    background: var(--gold);
+    border: 2px solid var(--ink);
+    border-radius: 0 4px 0 8px;
+    padding: 0 8px;
+    font-size: 13px; font-weight: 700;
+  }
+  .none { color: var(--muted); margin: 0; }
+
+  .empty {
+    border: 2px dashed var(--muted);
+    border-radius: 10px;
+    padding: 36px 24px;
+    color: var(--muted);
+  }
+  .empty strong { display: block; color: var(--ink); font-size: 18px; margin-bottom: 4px; }
+
+  @media (prefers-reduced-motion: reduce) { .dot.live { animation: none; } }
+  :focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>ของในเกมตอนนี้</h1>
+    <div class="status" role="status" aria-live="polite">
+      <span class="dot" id="dot"></span>
+      <span id="statusText">กำลังเชื่อมต่อ…</span>
+    </div>
+  </header>
+  <section id="board" aria-label="รายชื่อผู้เล่นและของที่มี"></section>
+</main>
+
+<script>
+  const board = document.getElementById("board");
+  const dot = document.getElementById("dot");
+  const statusText = document.getElementById("statusText");
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text; // ใช้ textContent กัน XSS
+    return node;
+  }
+
+  function render(players) {
+    board.replaceChildren();
+
+    if (players.length === 0) {
+      const box = el("div", "empty");
+      box.append(el("strong", "", "ยังไม่มีผู้เล่นในเกม"));
+      box.append(el("span", "", "เมื่อมีคนเข้าเกมและสคริปต์ส่งข้อมูลมา รายชื่อกับของที่มีจะขึ้นที่นี่"));
+      board.append(box);
+      return;
+    }
+
+    players.sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const p of players) {
+      const entries = Object.entries(p.items).sort((a, b) => a[0].localeCompare(b[0]));
+      const total = entries.reduce((sum, [, n]) => sum + n, 0);
+
+      const card = el("article", "player");
+      const head = el("div", "player-head");
+      head.append(el("h2", "player-name", p.name));
+      head.append(el("span", "player-total", `ของทั้งหมด ${total} ชิ้น`));
+      card.append(head);
+
+      if (entries.length === 0) {
+        card.append(el("p", "none", "ยังไม่มีของ"));
+      } else {
+        const grid = el("div", "slots");
+        for (const [name, count] of entries) {
+          const slot = el("div", "slot", name);
+          if (count > 1) slot.append(el("span", "badge", "x" + count));
+          grid.append(slot);
+        }
+        card.append(grid);
+      }
+      board.append(card);
+    }
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch("/api/inventory", { cache: "no-store" });
+      if (!res.ok) throw new Error(res.status);
+      const players = await res.json();
+      render(players);
+      dot.className = "dot live";
+      statusText.textContent = `ออนไลน์ ${players.length} คน · อัปเดตทุก 3 วินาที`;
+    } catch (err) {
+      dot.className = "dot error";
+      statusText.textContent = "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กำลังลองใหม่";
+    }
+  }
+
+  poll();
+  setInterval(poll, 3000);
+</script>
+</body>
+</html>
